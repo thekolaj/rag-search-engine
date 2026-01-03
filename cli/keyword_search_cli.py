@@ -2,8 +2,7 @@
 
 import argparse
 
-from lib.keyword_search import search_command
-from lib.inverted_index import InvertedIndex
+from lib.keyword_search import InvertedIndex, search_command
 
 
 def main() -> None:
@@ -36,11 +35,7 @@ def search(query: str) -> None:
 
 def build() -> None:
     print("Building inverted index...")
-    inverted_index = InvertedIndex()
-    inverted_index.build()
-    inverted_index.save()
-    docs = inverted_index.get_documents("merida")
-    print(f"First document for token 'merida' = {docs[0]}")
+    InvertedIndex().build()
     print("Inverted index built successfully.")
 
 
