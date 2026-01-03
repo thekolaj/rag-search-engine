@@ -1,6 +1,7 @@
 import os
 import pickle
 import string
+from collections import Counter
 
 from nltk.stem import PorterStemmer
 
@@ -8,33 +9,43 @@ from .search_utils import CACHE_DIR, DEFAULT_SEARCH_LIMIT, load_movies, load_sto
 
 INDEX_PATH = os.path.join(CACHE_DIR, "index.pkl")
 DOCMAP_PATH = os.path.join(CACHE_DIR, "docmap.pkl")
-
-
-def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
-    return InvertedIndex().load().get_documents(query, limit)
+TERM_FREQUENCIES_PATH = os.path.join(CACHE_DIR, "term_frequencies.pkl")
 
 
 class InvertedIndex:
     index: dict[str, set] = {}
     docmap: dict[int, dict] = {}
+    term_frequencies: dict[int, Counter] = {}
     stopwords = load_stopwords()
     stemmer = PorterStemmer()
 
-    def __add_document(self, doc_id: int, text: str) -> None:
-        tokens = self.preprocess_text(text)
-        for token in tokens:
-            self.index.setdefault(token, set()).add(doc_id)
+    def get_tf(self, doc_id: int, term: str):
+        tokens = self.preprocess_text(term)
+
+        if len(tokens) != 1:
+            raise ValueError("term must be a single token")
+
+        return self.term_frequencies.get(doc_id, Counter())[tokens[0]]
 
     def get_indexes(self, term: str) -> list[int]:
         return sorted(list(self.index.get(term, set())))
 
-    def get_documents(self, query: str, limit: int) -> list[dict]:
+    def get_documents(
+        self, query: str, limit: int = DEFAULT_SEARCH_LIMIT
+    ) -> list[dict]:
         query_tokens = self.preprocess_text(query)
         unique_ids = set()
         for token in query_tokens:
             unique_ids.update(self.index.get(token, set()))
 
         return [self.docmap[id] for id in sorted(list(unique_ids))[:limit]]
+
+    def preprocess_text(self, text: str) -> list:
+        text = text.lower()
+        text = text.translate(str.maketrans("", "", string.punctuation))
+        tokens = list(filter(lambda x: x and x not in self.stopwords, text.split()))
+        tokens = [self.stemmer.stem(token) for token in tokens]
+        return tokens
 
     def build(self):
         movies = load_movies()
@@ -55,6 +66,9 @@ class InvertedIndex:
         with open(DOCMAP_PATH, "wb") as f:
             pickle.dump(self.docmap, f)
 
+        with open(TERM_FREQUENCIES_PATH, "wb") as f:
+            pickle.dump(self.term_frequencies, f)
+
         return self
 
     def load(self):
@@ -64,11 +78,13 @@ class InvertedIndex:
         with open(DOCMAP_PATH, "rb") as f:
             self.docmap = pickle.load(f)
 
+        with open(TERM_FREQUENCIES_PATH, "rb") as f:
+            self.term_frequencies = pickle.load(f)
+
         return self
 
-    def preprocess_text(self, text: str) -> list:
-        text = text.lower()
-        text = text.translate(str.maketrans("", "", string.punctuation))
-        tokens = list(filter(lambda x: x and x not in self.stopwords, text.split()))
-        tokens = [self.stemmer.stem(token) for token in tokens]
-        return tokens
+    def __add_document(self, doc_id: int, text: str) -> None:
+        tokens = self.preprocess_text(text)
+        for token in tokens:
+            self.index.setdefault(token, set()).add(doc_id)
+        self.term_frequencies[doc_id] = Counter(tokens)
