@@ -1,3 +1,4 @@
+import math
 import os
 import pickle
 import string
@@ -19,7 +20,7 @@ class InvertedIndex:
     stopwords = load_stopwords()
     stemmer = PorterStemmer()
 
-    def get_tf(self, doc_id: int, term: str):
+    def get_tf(self, doc_id: int, term: str) -> int:
         tokens = self.preprocess_text(term)
 
         if len(tokens) != 1:
@@ -27,8 +28,19 @@ class InvertedIndex:
 
         return self.term_frequencies.get(doc_id, Counter())[tokens[0]]
 
-    def get_indexes(self, term: str) -> list[int]:
-        return sorted(list(self.index.get(term, set())))
+    def get_idf(self, term: str) -> float:
+        return math.log((len(self.docmap) + 1) / (len(self.get_doc_ids(term)) + 1))
+
+    def get_tf_idf(self, doc_id: int, term: str) -> float:
+        return self.get_tf(doc_id, term) * self.get_idf(term)
+
+    def get_doc_ids(self, term: str) -> list[int]:
+        tokens = self.preprocess_text(term)
+
+        if len(tokens) != 1:
+            raise ValueError("term must be a single token")
+
+        return sorted(list(self.index.get(tokens[0], set())))
 
     def get_documents(
         self, query: str, limit: int = DEFAULT_SEARCH_LIMIT

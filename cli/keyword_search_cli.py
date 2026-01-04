@@ -20,6 +20,17 @@ def main() -> None:
     tf_parser.add_argument("doc_id", type=int, help="Document ID")
     tf_parser.add_argument("term", type=str, help="Term to get frequency for")
 
+    idf_parser = subparsers.add_parser(
+        "idf", help="Get inverse document frequency for a given term"
+    )
+    idf_parser.add_argument("term", type=str, help="Term to get IDF for")
+
+    tf_idf_parser = subparsers.add_parser(
+        "tfidf", help="Get TF-IDF score for a given document ID and term"
+    )
+    tf_idf_parser.add_argument("doc_id", type=int, help="Document ID")
+    tf_idf_parser.add_argument("term", type=str, help="Term to get TF-IDF score for")
+
     args = parser.parse_args()
 
     match args.command:
@@ -29,6 +40,10 @@ def main() -> None:
             build()
         case "tf":
             tf(args.doc_id, args.term)
+        case "idf":
+            idf(args.term)
+        case "tfidf":
+            tf_idf(args.doc_id, args.term)
         case _:
             parser.print_help()
 
@@ -50,6 +65,16 @@ def build() -> None:
 def tf(doc_id: int, term: str) -> None:
     tf = InvertedIndex().load().get_tf(doc_id, term)
     print(f"Term frequency of '{term}' in document '{doc_id}': {tf}")
+
+
+def idf(term: str) -> None:
+    idf = InvertedIndex().load().get_idf(term)
+    print(f"Inverse document frequency of '{term}': {idf:.2f}")
+
+
+def tf_idf(doc_id: int, term: str) -> None:
+    tf_idf = InvertedIndex().load().get_tf_idf(doc_id, term)
+    print(f"TF-IDF score of '{term}' in document '{doc_id}': {tf_idf:.2f}")
 
 
 if __name__ == "__main__":
