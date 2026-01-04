@@ -6,7 +6,13 @@ from collections import Counter
 
 from nltk.stem import PorterStemmer
 
-from .search_utils import CACHE_DIR, DEFAULT_SEARCH_LIMIT, load_movies, load_stopwords
+from .search_utils import (
+    BM25_K1,
+    CACHE_DIR,
+    DEFAULT_SEARCH_LIMIT,
+    load_movies,
+    load_stopwords,
+)
 
 INDEX_PATH = os.path.join(CACHE_DIR, "index.pkl")
 DOCMAP_PATH = os.path.join(CACHE_DIR, "docmap.pkl")
@@ -33,6 +39,15 @@ class InvertedIndex:
 
     def get_tf_idf(self, doc_id: int, term: str) -> float:
         return self.get_tf(doc_id, term) * self.get_idf(term)
+
+    def get_bm25_tf(self, doc_id: int, term: str, k1: float = BM25_K1) -> float:
+        tf = self.get_tf(doc_id, term)
+        return (tf * (k1 + 1)) / (tf + k1)
+
+    def get_bm25_idf(self, term: str) -> float:
+        df = len(self.get_doc_ids(term))
+        N = len(self.docmap)
+        return math.log((N - df + 0.5) / (df + 0.5) + 1)
 
     def get_doc_ids(self, term: str) -> list[int]:
         tokens = self.preprocess_text(term)

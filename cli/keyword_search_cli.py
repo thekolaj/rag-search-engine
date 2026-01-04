@@ -3,6 +3,7 @@
 import argparse
 
 from lib.keyword_search import InvertedIndex
+from lib.search_utils import BM25_K1
 
 
 def main() -> None:
@@ -31,6 +32,22 @@ def main() -> None:
     tf_idf_parser.add_argument("doc_id", type=int, help="Document ID")
     tf_idf_parser.add_argument("term", type=str, help="Term to get TF-IDF score for")
 
+    bm25_idf_parser = subparsers.add_parser(
+        "bm25idf", help="Get BM25 IDF score for a given term"
+    )
+    bm25_idf_parser.add_argument(
+        "term", type=str, help="Term to get BM25 IDF score for"
+    )
+
+    bm25_tf_parser = subparsers.add_parser(
+        "bm25tf", help="Get BM25 TF score for a given document ID and term"
+    )
+    bm25_tf_parser.add_argument("doc_id", type=int, help="Document ID")
+    bm25_tf_parser.add_argument("term", type=str, help="Term to get BM25 TF score for")
+    bm25_tf_parser.add_argument(
+        "k1", type=float, nargs="?", default=BM25_K1, help="Tunable BM25 K1 parameter"
+    )
+
     args = parser.parse_args()
 
     match args.command:
@@ -44,6 +61,10 @@ def main() -> None:
             idf(args.term)
         case "tfidf":
             tf_idf(args.doc_id, args.term)
+        case "bm25idf":
+            bm25_idf(args.term)
+        case "bm25tf":
+            bm25_tf(args.doc_id, args.term, args.k1)
         case _:
             parser.print_help()
 
@@ -75,6 +96,16 @@ def idf(term: str) -> None:
 def tf_idf(doc_id: int, term: str) -> None:
     tf_idf = InvertedIndex().load().get_tf_idf(doc_id, term)
     print(f"TF-IDF score of '{term}' in document '{doc_id}': {tf_idf:.2f}")
+
+
+def bm25_idf(term: str) -> None:
+    bm25idf = InvertedIndex().load().get_bm25_idf(term)
+    print(f"BM25 IDF score of '{term}': {bm25idf:.2f}")
+
+
+def bm25_tf(doc_id: int, term: str, k1: float) -> None:
+    bm25tf = InvertedIndex().load().get_bm25_tf(doc_id, term, k1)
+    print(f"BM25 TF score of '{term}' in document '{doc_id}': {bm25tf:.2f}")
 
 
 if __name__ == "__main__":
