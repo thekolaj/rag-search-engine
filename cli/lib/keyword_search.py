@@ -8,6 +8,7 @@ from nltk.stem import PorterStemmer
 
 from .search_utils import (
     BM25_K1,
+    BM25_B,
     CACHE_DIR,
     DEFAULT_SEARCH_LIMIT,
     load_movies,
@@ -17,12 +18,14 @@ from .search_utils import (
 INDEX_PATH = os.path.join(CACHE_DIR, "index.pkl")
 DOCMAP_PATH = os.path.join(CACHE_DIR, "docmap.pkl")
 TERM_FREQUENCIES_PATH = os.path.join(CACHE_DIR, "term_frequencies.pkl")
+DOC_LENGTH_PATH = os.path.join(CACHE_DIR, "doc_lengths.pkl")
 
 
 class InvertedIndex:
     index: dict[str, set] = {}
     docmap: dict[int, dict] = {}
     term_frequencies: dict[int, Counter] = {}
+    doc_length: dict[int, int] = {}
     stopwords = load_stopwords()
     stemmer = PorterStemmer()
 
@@ -40,9 +43,14 @@ class InvertedIndex:
     def get_tf_idf(self, doc_id: int, term: str) -> float:
         return self.get_tf(doc_id, term) * self.get_idf(term)
 
-    def get_bm25_tf(self, doc_id: int, term: str, k1: float = BM25_K1) -> float:
+    def get_bm25_tf(
+        self, doc_id: int, term: str, k1: float = BM25_K1, b: float = BM25_B
+    ) -> float:
         tf = self.get_tf(doc_id, term)
-        return (tf * (k1 + 1)) / (tf + k1)
+        doc_length = self.doc_length.get(doc_id, 0)
+        avg_doc_length = self.__get_avg_doc_length()
+        length_norm =  1 - b + b * (doc_length / avg_doc_length) if avg_doc_length > 0 else 1
+        return (tf * (k1 + 1)) / (tf + k1 * length_norm)
 
     def get_bm25_idf(self, term: str) -> float:
         df = len(self.get_doc_ids(term))
@@ -96,6 +104,9 @@ class InvertedIndex:
         with open(TERM_FREQUENCIES_PATH, "wb") as f:
             pickle.dump(self.term_frequencies, f)
 
+        with open(DOC_LENGTH_PATH, "wb") as f:
+            pickle.dump(self.doc_length, f)
+
         return self
 
     def load(self):
@@ -108,6 +119,9 @@ class InvertedIndex:
         with open(TERM_FREQUENCIES_PATH, "rb") as f:
             self.term_frequencies = pickle.load(f)
 
+        with open(DOC_LENGTH_PATH, "rb") as f:
+            self.doc_length = pickle.load(f)
+
         return self
 
     def __add_document(self, doc_id: int, text: str) -> None:
@@ -115,3 +129,11 @@ class InvertedIndex:
         for token in tokens:
             self.index.setdefault(token, set()).add(doc_id)
         self.term_frequencies[doc_id] = Counter(tokens)
+        self.doc_length[doc_id] = len(tokens)
+
+    def __get_avg_doc_length(self) -> float:
+        doc_number = len(self.doc_length)
+        if doc_number == 0:
+            return 0.0
+
+        return sum(self.doc_length.values()) / doc_number
