@@ -1,9 +1,15 @@
 import os
+from collections import Counter
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from .search_utils import CACHE_DIR, load_movies
+from .search_utils import (
+    CACHE_DIR,
+    DEFAULT_SEARCH_LIMIT,
+    format_search_result,
+    load_movies,
+)
 
 MOVIE_EMBEDDINGS_PATH = os.path.join(CACHE_DIR, "movie_embeddings.npy")
 
@@ -19,7 +25,6 @@ class SemanticSearch:
         if not text or not text.strip():
             raise ValueError("cannot generate embedding for empty text")
         return self.model.encode([text])[0]
-
 
     def build_embeddings(self, documents):
         self.documents = documents
@@ -47,6 +52,37 @@ class SemanticSearch:
 
         return self.build_embeddings(documents)
 
+    def search(self, query: str, limit: int = DEFAULT_SEARCH_LIMIT):
+        if self.embeddings is None or self.embeddings.size == 0:
+            raise ValueError(
+                "No embeddings loaded. Call `load_or_create_embeddings` first."
+            )
+
+        if self.documents is None or len(self.documents) == 0:
+            raise ValueError(
+                "No documents loaded. Call `load_or_create_embeddings` first."
+            )
+
+        query_emb = self.generate_embedding(query)
+        scores = Counter()
+        for i in range(len(self.documents)):
+            scores[self.documents[i]["id"]] = cosine_similarity(
+                query_emb, self.embeddings[i]
+            )
+
+        results = []
+        for doc_id, score in scores.most_common(limit):
+            doc = self.document_map[doc_id]
+            results.append(
+                {
+                    "score": score,
+                    "title": doc["title"],
+                    "description": doc["description"],
+                }
+            )
+
+        return results
+
 
 def verify_model():
     search_instance = SemanticSearch()
@@ -71,3 +107,37 @@ def verify_embeddings():
     print(
         f"Embeddings shape: {embeddings.shape[0]} vectors in {embeddings.shape[1]} dimensions"
     )
+
+
+def embed_query_text(query: str):
+    embedding = SemanticSearch().generate_embedding(query)
+
+    print(f"Query: {query}")
+    print(f"First 5 dimensions: {embedding[:5]}")
+    print(f"Shape: {embedding.shape}")
+
+
+def cosine_similarity(vec1, vec2):
+    dot_product = np.dot(vec1, vec2)
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+
+    return dot_product / (norm1 * norm2)
+
+
+def semantic_search(query: str, limit: int = DEFAULT_SEARCH_LIMIT):
+    search_instance = SemanticSearch()
+    search_instance.load_or_create_embeddings(load_movies())
+    results = search_instance.search(query, limit)
+
+    print(f"Query: {query}")
+    print(f"Top {len(results)} results:")
+    print()
+
+    for i, result in enumerate(results, 1):
+        print(f"{i}. {result['title']} (score: {result['score']:.4f})")
+        print(f"   {result['description'][:100]}...")
+        print()
