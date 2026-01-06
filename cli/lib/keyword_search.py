@@ -11,6 +11,7 @@ from .search_utils import (
     BM25_B,
     CACHE_DIR,
     DEFAULT_SEARCH_LIMIT,
+    format_search_result,
     load_movies,
     load_stopwords,
 )
@@ -49,13 +50,18 @@ class InvertedIndex:
         tf = self.get_tf(doc_id, term)
         doc_length = self.doc_length.get(doc_id, 0)
         avg_doc_length = self.__get_avg_doc_length()
-        length_norm =  1 - b + b * (doc_length / avg_doc_length) if avg_doc_length > 0 else 1
+        length_norm = (
+            1 - b + b * (doc_length / avg_doc_length) if avg_doc_length > 0 else 1
+        )
         return (tf * (k1 + 1)) / (tf + k1 * length_norm)
 
     def get_bm25_idf(self, term: str) -> float:
         df = len(self.get_doc_ids(term))
         N = len(self.docmap)
         return math.log((N - df + 0.5) / (df + 0.5) + 1)
+
+    def get_bm25(self, doc_id: int, term: str) -> float:
+        return self.get_bm25_tf(doc_id, term) * self.get_bm25_idf(term)
 
     def get_doc_ids(self, term: str) -> list[int]:
         tokens = self.preprocess_text(term)
@@ -74,6 +80,27 @@ class InvertedIndex:
             unique_ids.update(self.index.get(token, set()))
 
         return [self.docmap[id] for id in sorted(list(unique_ids))[:limit]]
+
+    def bm25_search(self, query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
+        query_tokens = self.preprocess_text(query)
+        scores = Counter()
+        for token in query_tokens:
+            docs = self.index.get(token, set())
+            for doc in docs:
+                scores[doc] += self.get_bm25(doc, token)
+
+        results = []
+        for doc_id, score in scores.most_common(limit):
+            doc = self.docmap[doc_id]
+            formatted_result = format_search_result(
+                doc_id=doc["id"],
+                title=doc["title"],
+                document=doc["description"],
+                score=score,
+            )
+            results.append(formatted_result)
+
+        return results
 
     def preprocess_text(self, text: str) -> list:
         text = text.lower()

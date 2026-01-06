@@ -51,11 +51,18 @@ def main() -> None:
         "b", type=float, nargs="?", default=BM25_B, help="Tunable BM25 b parameter"
     )
 
+    bm25search_parser = subparsers.add_parser(
+        "bm25search", help="Search movies using full BM25 scoring"
+    )
+    bm25search_parser.add_argument("query", type=str, help="Search query")
+
     args = parser.parse_args()
 
     match args.command:
         case "search":
             search(args.query)
+        case "bm25search":
+            bm25search(args.query)
         case "build":
             build()
         case "tf":
@@ -78,6 +85,14 @@ def search(query: str) -> None:
     print(f"Searching for: {query}")
     for i, movie in enumerate(movies, 1):
         print(f"{i}. ({movie['id']}) {movie['title']}")
+
+
+def bm25search(query: str) -> None:
+    results = InvertedIndex().load().bm25_search(query)
+
+    print(f"Searching for: {query}")
+    for i, res in enumerate(results, 1):
+        print(f"{i}. ({res['id']}) {res['title']} - Score: {res['score']:.2f}")
 
 
 def build() -> None:
