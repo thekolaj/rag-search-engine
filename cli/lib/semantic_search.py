@@ -6,8 +6,9 @@ from sentence_transformers import SentenceTransformer
 
 from .search_utils import (
     CACHE_DIR,
+    DEFAULT_CHUNK_OVERLAP,
+    DEFAULT_CHUNK_SIZE,
     DEFAULT_SEARCH_LIMIT,
-    format_search_result,
     load_movies,
 )
 
@@ -141,3 +142,21 @@ def semantic_search(query: str, limit: int = DEFAULT_SEARCH_LIMIT):
         print(f"{i}. {result['title']} (score: {result['score']:.4f})")
         print(f"   {result['description'][:100]}...")
         print()
+
+
+def chunk_text(
+    text: str,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    overlap: int = DEFAULT_CHUNK_OVERLAP,
+) -> None:
+    words = text.split()
+    chunks = []
+    chunk_start = 0
+    while chunk_start + overlap < len(words):
+        chunk_end = chunk_start + chunk_size
+        chunks.append(" ".join(words[chunk_start:chunk_end]))
+        chunk_start = chunk_end - overlap
+
+    print(f"Chunking {len(text)} characters")
+    for i, chunk in enumerate(chunks, 1):
+        print(f"{i}. {chunk}")
