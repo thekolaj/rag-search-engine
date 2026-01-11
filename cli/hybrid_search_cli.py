@@ -1,6 +1,8 @@
 import argparse
 
 from lib.hybrid_search import HybridSearch, normalize
+from lib.query_enhancement import enhance_query
+from lib.reranking import rerank
 from lib.search_utils import load_movies
 
 
@@ -42,6 +44,18 @@ def main() -> None:
     rrf_parser.add_argument(
         "--limit", type=int, default=5, help="Number of results to return (default=5)"
     )
+    rrf_parser.add_argument(
+        "--enhance",
+        type=str,
+        choices=["spell", "rewrite", "expand"],
+        help="Query enhancement method",
+    )
+    rrf_parser.add_argument(
+        "--rerank-method",
+        type=str,
+        choices=["individual", "batch", "cross_encoder"],
+        help="Reranking method",
+    )
 
     args = parser.parse_args()
 
@@ -57,9 +71,28 @@ def main() -> None:
             for i, result in enumerate(results, 1):
                 print(f"\n{i}. {result['title']} (score: {result['hybrid_score']:.4f})")
         case "rrf-search":
+            query = args.query
+            if args.enhance:
+                query = enhance_query(query, method=args.enhance)
+
+            search_limit = args.limit * 5 if args.rerank_method else args.limit
             results = HybridSearch(load_movies()).rrf_search(
-                args.query, args.k, args.limit
+                query, args.k, search_limit
             )
+
+            reranked = False
+            if args.rerank_method:
+                results = rerank(query, results, method=args.rerank_method, limit=args.limit)
+                reranked = True
+
+            if args.enhance:
+                print(
+                    f"Enhanced query ({args.enhance}): '{args.query}' -> '{query}'\n"
+                )
+            if reranked:
+                print(
+                    f"Reranking top {len(results)} results using {args.rerank_method} method...\n"
+                )
             for i, result in enumerate(results, 1):
                 print(f"\n{i}. {result['title']} (score: {result['score']:.4f})")
         case _:
